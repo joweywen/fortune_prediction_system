@@ -1,0 +1,414 @@
+﻿import React, { useState, useEffect } from 'react';
+import { LineChart, Line, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Upload, User, TrendingUp, Heart, Star, Calendar, Award, Sparkles, Eye, LogOut } from 'lucide-react';
+
+// API基础URL - 实际使用时需要配置
+const API_BASE = 'http://localhost:5000/api';
+
+export default function FortunePredictionSystem() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentView, setCurrentView] = useState('login');
+  const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' });
+  const [token, setToken] = useState('');
+  const [userData, setUserData] = useState(null);
+  const [predictionData, setDictionData] = useState(null);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [predictions, setPredictions] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+
+  // 登录
+  const handleLogin = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: authForm.username,
+          password: authForm.password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setToken(data.access_token);
+        setUserData(data.user);
+        setIsLoggedIn(true);
+        setCurrentView('dashboard');
+        loadDashboard(data.access_token);
+      } else {
+        alert(data.error || '登录失败');
+      }
+    } catch (error) {
+      alert('登录失败: ' + error.message);
+    }
+  };
+
+  // 注册
+  const handleRegister = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authForm)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setToken(data.access_token);
+        setUserData(data.user);
+        setIsLoggedIn(true);
+        setCurrentView('dashboard');
+        loadDashboard(data.access_token);
+      } else {
+        alert(data.error || '注册失败');
+      }
+    } catch (error) {
+      alert('注册失败: ' + error.message);
+    }
+  };
+
+  // 加载仪表盘
+  const loadDashboard = async (authToken) => {
+    try {
+      const response = await fetch(`${API_BASE}/dashboard/stats`, {
+        headers: { 'Authorization': `Bearer ${authToken || token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardStats(data);
+      }
+    } catch (error) {
+      console.error('加载仪表盘失败:', error);
+    }
+  };
+
+  // 文件上传
+  const handleFileUpload = async () => {
+    if (!selectedFile) {
+      alert('请选择文件');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const response = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setDictionData(data);
+        setCurrentView('result');
+        loadDashboard();
+      } else {
+        alert(data.error || '分析失败');
+      }
+    } catch (error) {
+      alert('上传失败: ' + error.message);
+    } finally {
+      setUploading(false);
+      setSelectedFile(null);
+    }
+  };
+
+  // 登出
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setToken('');
+    setUserData(null);
+    setCurrentView('login');
+    setDictionData(null);
+    setDashboardStats(null);
+  };
+
+  // 登录/注册界面
+  if (!isLoggedIn) {
+    return (
+<div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+        <div className="text-center mb-8">
+            <Sparkles className="w-16 h-16 mx-auto text-purple-600 mb-4" />
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">命运预测系统</h1>
+            <p className="text-gray-600">探索你的性格、事业与未来</p>
+        </div>
+
+        <div className="space-y-4">
+            {currentView === 'register' && (
+            <input type="email"
+                   placeholder="邮箱"
+                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                   value={authForm.email}
+                   onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+            />
+            )}
+
+            <input type="text"
+                   placeholder="用户名"
+                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                   value={authForm.username}
+                   onChange={(e) => setAuthForm({...authForm, username: e.target.value})}
+            />
+
+            <input type="password"
+                   placeholder="密码"
+                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                   value={authForm.password}
+                   onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+            />
+
+            <button onClick={currentView = = ='login' ? handleLogin : handleRegister}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all">
+                {currentView === 'login' ? '登录' : '注册'}
+            </button>
+
+            <button onClick={() =>
+                setCurrentView(currentView === 'login' ? 'register' : 'login')}
+                className="w-full text-purple-600 hover:text-purple-700 text-sm"
+                >
+                {currentView === 'login' ? '没有账号？立即注册' : '已有账号？返回登录'}
+            </button>
+        </div>
+    </div>
+</div>
+    );
+  }
+
+  // 主应用界面
+  return (
+<div className="min-h-screen bg-gray-50">
+    {/* 导航栏 */}
+    <nav className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+                <Sparkles className="w-8 h-8 text-purple-600" />
+                <span className="text-xl font-bold text-gray-800">命运预测系统</span>
+            </div>
+
+            <div className="flex items-center space-x-4">
+                <button onClick={() =>
+                    setCurrentView('dashboard')}
+                    className={`px-4 py-2 rounded-lg ${currentView === 'dashboard' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                    仪表盘
+                </button>
+                <button onClick={() =>
+                    setCurrentView('upload')}
+                    className={`px-4 py-2 rounded-lg ${currentView === 'upload' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                    新建分析
+                </button>
+                <div className="flex items-center space-x-2 text-gray-700">
+                    <User className="w-5 h-5" />
+                    <span>{userData?.username}</span>
+                </div>
+                <button onClick={handleLogout}
+                        className="text-red-600 hover:text-red-700">
+                    <LogOut className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    {/* 仪表盘视图 */}
+    {currentView === 'dashboard' && dashboardStats && (
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">综合运势仪表盘</h2>
+
+        {/* 运势卡片 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-700">日运势</h3>
+                    <Calendar className="w-6 h-6 text-blue-500" />
+                </div>
+                <div className="text-3xl font-bold text-blue-600 mb-2">{dashboardStats.daily?.today}/100</div>
+                <div className="text-sm text-gray-500">
+                    昨天: {dashboardStats.daily?.yesterday} | 明天: {dashboardStats.daily?.tomorrow}
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-700">月运势</h3>
+                    <TrendingUp className="w-6 h-6 text-green-500" />
+                </div>
+                <div className="text-3xl font-bold text-green-600 mb-2">{dashboardStats.monthly?.current}/100</div>
+                <div className="text-sm text-gray-500">
+                    上月: {dashboardStats.monthly?.lastMonth} | 下月: {dashboardStats.monthly?.nextMonth}
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-700">年运势</h3>
+                    <Star className="w-6 h-6 text-yellow-500" />
+                </div>
+                <div className="text-3xl font-bold text-yellow-600 mb-2">{dashboardStats.yearly?.thisYear}/100</div>
+                <div className="text-sm text-gray-500">
+                    去年: {dashboardStats.yearly?.lastYear} | 明年: {dashboardStats.yearly?.nextYear}
+                </div>
+            </div>
+        </div>
+
+        {/* 财富趋势图 */}
+        {dashboardStats.wealth_trend && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">财富积累趋势</h3>
+            <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={dashboardStats.wealth_trend}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="year" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="score" stroke="#8b5cf6" strokeWidth={2} />
+                </LineChart>
+            </ResponsiveContainer>
+        </div>
+        )}
+
+        {/* 爱情指数 */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center space-x-2 mb-4">
+                <Heart className="w-6 h-6 text-red-500" />
+                <h3 className="text-lg font-semibold text-gray-700">感情稳定性</h3>
+            </div>
+            <div className="text-4xl font-bold text-red-500">{dashboardStats.love_score}/100</div>
+        </div>
+
+        {/* 职业领域 */}
+        {dashboardStats.career_fields && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center space-x-2 mb-4">
+                <Award className="w-6 h-6 text-purple-500" />
+                <h3 className="text-lg font-semibold text-gray-700">最佳职业领域</h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {dashboardStats.career_fields.map((field, idx) => (
+                <span key={idx} className="px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                    {field}
+                </span>
+                ))}
+            </div>
+        </div>
+        )}
+    </div>
+    )}
+
+    {/* 上传视图 */}
+    {currentView === 'upload' && (
+    <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-xl shadow-md p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">上传照片/视频</h2>
+
+            <div className="border-4 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-purple-500 transition-colors">
+                <Upload className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <input type="file"
+                       accept="image/*,video/*"
+                       onChange={(e) => setSelectedFile(e.target.files[0])}
+                className="hidden"
+                id="file-upload"
+                />
+                <label htmlFor="file-upload" className="cursor-pointer">
+                    <div className="text-gray-600 mb-2">
+                        {selectedFile ? selectedFile.name : '点击选择文件或拖拽文件到此处'}
+                    </div>
+                    <div className="text-sm text-gray-400">支持 JPG, PNG, MP4, AVI 格式</div>
+                </label>
+            </div>
+
+            {selectedFile && (
+            <button onClick={handleFileUpload}
+                    disabled={uploading}
+                    className="w-full mt-6 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50">
+                {uploading ? '分析中...' : '开始分析'}
+            </button>
+            )}
+        </div>
+    </div>
+    )}
+
+    {/* 分析结果视图 */}
+    {currentView === 'result' && predictionData && (
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">分析结果</h2>
+
+        {/* 性格分析 */}
+        {predictionData.personality && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">性格分析</h3>
+            <div className="mb-4">
+                <div className="text-lg font-medium text-purple-600 mb-2">
+                    MBTI类型: {predictionData.personality.mbti}
+                </div>
+                <p className="text-gray-600">{predictionData.personality.description}</p>
+            </div>
+
+            <ResponsiveContainer width="100%" height={300}>
+                <RadarChart data={Object.entries(predictionData.personality.bigFive).map(([key, value])=>
+                    ({
+                    trait: key,
+                    score: value
+                    }))}>
+                    <PolarGrid />
+                    <PolarAngleAxis dataKey="trait" />
+                    <PolarRadiusAxis domain={[0, 100]} />
+                    <Radar dataKey="score" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.6} />
+                </RadarChart>
+            </ResponsiveContainer>
+
+            <div className="mt-4">
+                <h4 className="font-semibold text-gray-700 mb-2">性格优势:</h4>
+                <div className="flex flex-wrap gap-2">
+                    {predictionData.personality.strengths?.map((strength, idx) => (
+                    <span key={idx} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                        {strength}
+                    </span>
+                    ))}
+                </div>
+            </div>
+        </div>
+        )}
+
+        {/* 今日/本月/今年建议 */}
+        {predictionData.advice && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-blue-50 rounded-xl p-6">
+                <h4 className="font-semibold text-blue-800 mb-3">今日建议</h4>
+                <p className="text-blue-700 text-sm">{predictionData.advice.daily}</p>
+            </div>
+            <div className="bg-green-50 rounded-xl p-6">
+                <h4 className="font-semibold text-green-800 mb-3">本月建议</h4>
+                <p className="text-green-700 text-sm">{predictionData.advice.monthly}</p>
+            </div>
+            <div className="bg-purple-50 rounded-xl p-6">
+                <h4 className="font-semibold text-purple-800 mb-3">今年建议</h4>
+                <p className="text-purple-700 text-sm">{predictionData.advice.yearly}</p>
+            </div>
+        </div>
+        )}
+
+        <button onClick={() =>
+            {
+            setCurrentView('dashboard');
+            loadDashboard();
+            }}
+            className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+            >
+            返回仪表盘
+        </button>
+    </div>
+    )}
+</div>
+  );
+}
