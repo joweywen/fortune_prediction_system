@@ -1,9 +1,2 @@
-﻿
-"""
-数据模型包
-"""
-
-from models.user import User
-from models.prediction import Prediction
-
-__all__ = ['User', 'Prediction']
+"""数据模型包"""
+# 暂时为空，让 app.py 直接导入

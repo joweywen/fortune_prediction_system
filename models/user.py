@@ -1,7 +1,4 @@
-﻿"""
-用户数据模型
-"""
-
+"""用户数据模型"""
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 
@@ -19,9 +16,6 @@ class User(db.Model):
     last_login = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
     is_admin = db.Column(db.Boolean, default=False)
-    
-    # 关系
-    predictions = db.relationship('Prediction', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<User {self.username}>'

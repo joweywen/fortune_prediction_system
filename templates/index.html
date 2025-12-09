@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>命运预测系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        h1 { 
+            font-size: 2.5em; 
+            margin-bottom: 10px; 
+            color: #667eea;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .status-card {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(67,233,123,0.3);
+        }
+        .status-card h2 { margin-bottom: 10px; }
+        .api-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        .api-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        .api-item {
+            background: white;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .method {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 0.85em;
+        }
+        .post { background: #4caf50; color: white; }
+        .get { background: #2196f3; color: white; }
+        .buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+        }
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #999;
+            font-size: 0.9em;
+        }
+        .emoji { font-size: 1.5em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="emoji">✨</span> 命运预测系统</h1>
+        <p class="subtitle">基于AI的性格分析与命运预测平台</p>
+        
+        <div class="status-card">
+            <h2><span class="emoji">🎉</span> 系统运行正常</h2>
+            <p>API服务已启动并准备就绪</p>
+            <p id="api-status">正在检测API状态...</p>
+        </div>
+
+        <div class="api-section">
+            <h3><span class="emoji">📡</span> 可用API接口</h3>
+            
+            <div class="api-item">
+                <span class="method post">POST</span>
+                <span>/api/register</span> - 用户注册
+            </div>
+            
+            <div class="api-item">
+                <span class="method post">POST</span>
+                <span>/api/login</span> - 用户登录
+            </div>
+            
+            <div class="api-item">
+                <span class="method post">POST</span>
+                <span>/api/upload</span> - 上传照片进行分析
+            </div>
+            
+            <div class="api-item">
+                <span class="method get">GET</span>
+                <span>/api/predictions</span> - 获取预测历史列表
+            </div>
+            
+            <div class="api-item">
+                <span class="method get">GET</span>
+                <span>/api/prediction/{id}</span> - 获取预测详情
+            </div>
+            
+            <div class="api-item">
+                <span class="method get">GET</span>
+                <span>/api/dashboard/stats</span> - 获取仪表盘统计
+            </div>
+            
+            <div class="api-item">
+                <span class="method get">GET</span>
+                <span>/api/health</span> - 健康检查
+            </div>
+        </div>
+
+        <div class="buttons">
+            <a href="/api/health" class="btn btn-primary" target="_blank">
+                <span class="emoji">🔍</span> 测试API
+            </a>
+            <a href="https://github.com/joweywen/fortune_prediction_system" class="btn btn-secondary" target="_blank">
+                <span class="emoji">📖</span> 查看文档
+            </a>
+        </div>
+
+        <div class="footer">
+            <p>💡 提示：使用 Postman、curl 或前端应用来调用API</p>
+            <p>🚀 版本 1.0.0 | MIT License</p>
+        </div>
+    </div>
+
+    <script>
+        // 测试API连接
+        fetch('/api/health')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('api-status').textContent = 
+                    '✅ API状态: ' + data.status + ' (响应正常)';
+                document.getElementById('api-status').style.color = '#fff';
+            })
+            .catch(err => {
+                document.getElementById('api-status').textContent = 
+                    '❌ API连接失败: ' + err.message;
+                document.getElementById('api-status').style.color = '#ff5252';
+            });
+    </script>
+</body>
+</html>

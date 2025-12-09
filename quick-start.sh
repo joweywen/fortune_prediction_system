@@ -1,95 +1,142 @@
 ﻿#!/bin/bash
 
 echo "========================================="
-echo "命运预测系统 - 快速启动脚本"
+echo "命运预测系统 - 完全修复版启动脚本"
 echo "========================================="
 echo ""
 
-# 检查Python版本
-echo "检查Python版本..."
-python_version=$(python3 --version 2>&1 | awk '{print $2}')
-echo "Python版本: $python_version"
+# 获取脚本所在目录
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
 
+echo "当前目录: $SCRIPT_DIR"
+echo ""
+
+# 检查Python
+echo "检查Python环境..."
 if ! command -v python3 &> /dev/null; then
-    echo "错误: 未找到Python3，请先安装Python 3.9+"
+    echo "✗ 未找到Python3"
     exit 1
 fi
 
-# 创建虚拟环境
+python_version=$(python3 --version 2>&1 | awk '{print $2}')
+echo "✓ Python版本: $python_version"
 echo ""
-echo "创建虚拟环境..."
+
+# 删除旧的虚拟环境（如果损坏）
+if [ -d "venv" ] && [ ! -f "venv/bin/activate" ]; then
+    echo "检测到损坏的虚拟环境，正在删除..."
+    rm -rf venv
+    echo "✓ 旧环境已删除"
+fi
+
+# 创建虚拟环境
+echo "设置虚拟环境..."
 if [ ! -d "venv" ]; then
     python3 -m venv venv
-    echo "✓ 虚拟环境创建完成"
+    if [ $? -eq 0 ]; then
+        echo "✓ 虚拟环境已创建"
+    else
+        echo "✗ 虚拟环境创建失败"
+        echo "尝试安装 python3-venv:"
+        echo "  sudo apt-get install python3-venv"
+        exit 1
+    fi
 else
     echo "✓ 虚拟环境已存在"
 fi
+echo ""
 
 # 激活虚拟环境
-echo ""
 echo "激活虚拟环境..."
-source venv/bin/activate
-echo "✓ 虚拟环境已激活"
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+    echo "✓ 虚拟环境已激活"
+    echo "Python路径: $(which python3)"
+else
+    echo "✗ 找不到 venv/bin/activate"
+    exit 1
+fi
+echo ""
 
 # 升级pip
-echo ""
 echo "升级pip..."
-pip install --upgrade pip -q
-echo "✓ pip升级完成"
+python3 -m pip install --upgrade pip
+echo "✓ pip已升级"
+echo ""
 
 # 安装依赖
+echo "安装项目依赖（可能需要几分钟）..."
+python3 -m pip install -r requirements.txt
+if [ $? -eq 0 ]; then
+    echo "✓ 依赖安装完成"
+else
+    echo "✗ 依赖安装失败"
+    echo ""
+    echo "尝试使用镜像源安装:"
+    python3 -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+    if [ $? -ne 0 ]; then
+        echo "✗ 镜像源安装也失败，请检查网络连接"
+        exit 1
+    fi
+    echo "✓ 使用镜像源安装成功"
+fi
 echo ""
-echo "安装项目依赖..."
-pip install -r requirements.txt -q
-echo "✓ 依赖安装完成"
 
 # 创建必要目录
-echo ""
-echo "创建必要目录..."
-mkdir -p static/uploads logs backups
+echo "创建项目目录..."
+mkdir -p static/uploads logs backups tests
 touch static/uploads/.gitkeep
-echo "✓ 目录结构创建完成"
-
-# 检查配置文件
+echo "✓ 目录结构已创建"
 echo ""
+
+# 配置环境变量
 echo "检查配置文件..."
 if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
         cp .env.example .env
-        echo "✓ 已从.env.example创建.env文件"
-        echo "⚠ 请编辑.env文件，设置密钥等配置"
+        echo "✓ 已创建.env文件"
     else
-        echo "⚠ 未找到.env.example文件"
+        echo "⚠ 未找到.env.example，创建默认配置"
+        cat > .env << 'ENVEOF'
+FLASK_ENV=development
+SECRET_KEY=dev-secret-key-change-in-production
+JWT_SECRET_KEY=dev-jwt-secret-change-in-production
+DATABASE_URL=sqlite:///fortune_prediction.db
+UPLOAD_FOLDER=static/uploads
+MAX_CONTENT_LENGTH=16777216
+ENVEOF
+        echo "✓ 已创建默认.env文件"
     fi
 else
     echo "✓ .env文件已存在"
 fi
+echo ""
 
 # 初始化数据库
-echo ""
 echo "初始化数据库..."
 python3 init_db.py
-echo "✓ 数据库初始化完成"
+if [ $? -eq 0 ]; then
+    echo "✓ 数据库初始化完成"
+else
+    echo "✗ 数据库初始化失败"
+    exit 1
+fi
+echo ""
+
+# 运行检查
+if [ -f "check_project.py" ]; then
+    echo "运行项目完整性检查..."
+    python3 check_project.py
+    echo ""
+fi
 
 # 启动应用
-echo ""
 echo "========================================="
-echo "准备启动应用..."
+echo "启动Web服务..."
 echo "访问地址: http://localhost:5000"
 echo "按 Ctrl+C 停止服务"
 echo "========================================="
 echo ""
 
-# 询问是否立即启动
-read -p "是否立即启动应用? (Y/n): " -n 1 -r
-echo ""
-
-if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
-    python3 run.py
-else
-    echo ""
-    echo "准备完成！运行以下命令启动应用:"
-    echo "  source venv/bin/activate"
-    echo "  python3 run.py"
-    echo ""
-fi
+python3 run.py

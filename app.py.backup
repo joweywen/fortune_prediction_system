@@ -3,7 +3,7 @@
 修复完善版本
 """
 
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_cors import CORS
@@ -79,7 +79,11 @@ def allowed_file(filename):
 @app.route('/')
 def index():
     """首页"""
-    return render_template('index.html')
+    return jsonify({
+        'name': '命运预测系统',
+        'version': '1.0.0',
+        'status': 'running'
+    })
 
 @app.route('/api/register', methods=['POST'])
 def register():
