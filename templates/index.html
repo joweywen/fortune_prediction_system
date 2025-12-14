@@ -4,35 +4,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>命运预测系统</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
-
         const API_BASE = window.location.origin + '/api';
 
-        // 简单的图表组件 (使用 Chart.js)
+        // =========================================================
+        // 图表组件 (已修复 LineChart 和 RadarChart 的 Chart 实例管理问题)
+        // =========================================================
+
+        // 图表组件 (折线图)
         const LineChart = ({ data, dataKey, height = 250 }) => {
             const canvasRef = useRef(null);
+            const chartRef = useRef(null); // 存储 Chart 实例的新 Ref
 
             useEffect(() => {
                 if (!canvasRef.current || !data) return;
-                // 确保 Chart.js 已加载
-                if (typeof window.Chart === 'undefined') {
-                    console.error("Chart.js 未加载");
-                    return;
-                }
                 const ctx = canvasRef.current.getContext('2d');
-                if (window.myChart) window.myChart.destroy();
 
-                window.myChart = new Chart(ctx, {
+                // 销毁旧实例
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                }
+
+                // 创建新实例
+                chartRef.current = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.map(d => d.year || d.month || ''),
@@ -42,39 +48,54 @@
                             borderColor: '#8b5cf6',
                             backgroundColor: 'rgba(139, 92, 246, 0.1)',
                             tension: 0.4,
-                            borderWidth: 3
+                            borderWidth: 3,
+                            fill: true
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } }
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, max: 100 }
+                        }
                     }
                 });
+
+                // 清理函数：组件卸载或依赖变化时销毁图表
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                        chartRef.current = null;
+                    }
+                };
             }, [data, dataKey]);
 
             return <canvas ref={canvasRef} height={height}></canvas>;
         };
 
+        // 图表组件 (雷达图)
         const RadarChart = ({ data }) => {
             const canvasRef = useRef(null);
-            // FIX: Big Five 英文键映射为中文标签
-            const keyMap = { openness: '开放性', conscientiousness: '责任心', extraversion: '外向性', agreeableness: '宜人性', neuroticism: '神经质' };
+            const chartRef = useRef(null); // 存储 Chart 实例的新 Ref
 
+            // 英文键映射为中文标签
+            const keyMap = { openness: '开放性', conscientiousness: '责任心', extraversion: '外向性', agreeableness: '宜人性', neuroticism: '神经质', health: '健康', family: '家庭', career: '事业', social: '社交', personal: '个人' };
 
             useEffect(() => {
                 if (!canvasRef.current || !data) return;
-                if (typeof window.Chart === 'undefined') {
-                    console.error("Chart.js 未加载");
-                    return;
-                }
                 const ctx = canvasRef.current.getContext('2d');
-                if (window.radarChart) window.radarChart.destroy();
+
+                // 销毁旧实例
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                }
 
                 const labels = Object.keys(data).map(key => keyMap[key] || key);
                 const scores = Object.values(data);
 
-                window.radarChart = new Chart(ctx, {
+                // 创建新实例
+                chartRef.current = new Chart(ctx, {
                     type: 'radar',
                     data: {
                         labels: labels,
@@ -89,26 +110,39 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        scales: {
-                            r: {
-                                beginAtZero: true,
-                                max: 100,
-                                ticks: { stepSize: 20 }
-                            }
-                        },
+                        scales: { r: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } } },
                         plugins: { legend: { display: false } }
                     }
                 });
+
+                // 清理函数：组件卸载或依赖变化时销毁图表
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                        chartRef.current = null;
+                    }
+                };
             }, [data]);
 
             return <canvas ref={canvasRef} height="300"></canvas>;
         };
 
-        // 名人预置数据
+        // =========================================================
+        // 数据模型 (保持不变)
+        // =========================================================
+
+        // 生成月度数据
+        const generateMonthlyTrend = (base, variance = 5) => {
+            return Array.from({length: 12}, (_, i) => ({
+                month: `${i+1}月`,
+                score: Math.min(100, Math.max(40, base + Math.floor(Math.random() * variance * 2 - variance)))
+            }));
+        };
+
+        // 名人完整数据
         const CELEBRITIES = {
             '马云': {
-                name: '马云',
-                avatar: '🎯',
+                name: '马云', avatar: '🎯',
                 personality: {
                     bigFive: { openness: 92, conscientiousness: 88, extraversion: 85, agreeableness: 75, neuroticism: 35 },
                     mbti: 'ENTJ',
@@ -120,17 +154,48 @@
                     yearly: { lastYear: 85, thisYear: 92, nextYear: 90 }
                 },
                 wealth: {
+                    score: 98,
                     current_trend: 95,
+                    monthlyTrend: generateMonthlyTrend(95, 3),
                     accumulationTrend: [
                         {year: 2020, score: 85}, {year: 2021, score: 88}, {year: 2022, score: 90},
                         {year: 2023, score: 92}, {year: 2024, score: 94}, {year: 2025, score: 95}
+                    ],
+                    luckyTime: '上午 9:00 - 11:00 (巳时)',
+                    luckyDirection: '东方 (利于合作和投资)'
+                },
+                love: {
+                    score: 88,
+                    stabilityScore: 92,
+                    attractiveness: 85,
+                    monthlyTrend: generateMonthlyTrend(88, 4),
+                    luckyTime: '下午 3:00 - 5:00 (申时)',
+                    luckyDirection: '东北方 (利于稳定和家庭)'
+                },
+                travel: {
+                    score: 90,
+                    bestMonths: ['3月', '5月', '9月', '10月'],
+                    monthlyTrend: [
+                        {month: '1月', score: 75}, {month: '2月', score: 78}, {month: '3月', score: 92},
+                        {month: '4月', score: 85}, {month: '5月', score: 90}, {month: '6月', score: 82},
+                        {month: '7月', score: 80}, {month: '8月', score: 83}, {month: '9月', score: 95},
+                        {month: '10月', score: 93}, {month: '11月', score: 85}, {month: '12月', score: 80}
+                    ],
+                    luckyDirections: ['东方', '东南方'],
+                    travelAdvice: '适合商务出行，春秋季节运势最佳，建议选择科技发达城市'
+                },
+                happiness: {
+                    score: 91,
+                    dimensions: { health: 88, family: 90, career: 95, social: 89, personal: 92 },
+                    yearlyTrend: [
+                        {year: 2020, score: 82}, {year: 2021, score: 85}, {year: 2022, score: 87},
+                        {year: 2023, score: 89}, {year: 2024, score: 90}, {year: 2025, score: 91}
                     ]
                 },
                 career: { successRate: 95, bestFields: ['电子商务', '战略管理', '互联网创业'] }
             },
             '马斯克': {
-                name: '马斯克',
-                avatar: '🚀',
+                name: '马斯克', avatar: '🚀',
                 personality: {
                     bigFive: { openness: 98, conscientiousness: 85, extraversion: 75, agreeableness: 60, neuroticism: 45 },
                     mbti: 'INTJ',
@@ -142,17 +207,43 @@
                     yearly: { lastYear: 87, thisYear: 95, nextYear: 93 }
                 },
                 wealth: {
+                    score: 99,
                     current_trend: 98,
+                    monthlyTrend: generateMonthlyTrend(97, 2),
                     accumulationTrend: [
                         {year: 2020, score: 88}, {year: 2021, score: 90}, {year: 2022, score: 93},
                         {year: 2023, score: 95}, {year: 2024, score: 97}, {year: 2025, score: 98}
+                    ],
+                    luckyTime: '下午 1:00 - 3:00 (未时)',
+                    luckyDirection: '西方 (利于科技创新和风险投资)'
+                },
+                love: {
+                    score: 78,
+                    stabilityScore: 75,
+                    attractiveness: 88,
+                    monthlyTrend: generateMonthlyTrend(78, 5),
+                    luckyTime: '晚上 7:00 - 9:00 (戌时)',
+                    luckyDirection: '北方 (利于深度思考和精神伴侣)'
+                },
+                travel: {
+                    score: 92,
+                    bestMonths: ['4月', '6月', '9月', '11月'],
+                    monthlyTrend: generateMonthlyTrend(90, 6),
+                    luckyDirections: ['西方', '西北方'],
+                    travelAdvice: '全球出行运势极佳，特别适合科技创新之旅和太空主题活动'
+                },
+                happiness: {
+                    score: 89,
+                    dimensions: { health: 85, family: 80, career: 98, social: 87, personal: 95 },
+                    yearlyTrend: [
+                        {year: 2020, score: 85}, {year: 2021, score: 86}, {year: 2022, score: 87},
+                        {year: 2023, score: 88}, {year: 2024, score: 89}, {year: 2025, score: 89}
                     ]
                 },
                 career: { successRate: 98, bestFields: ['航天科技', '新能源', '人工智能'] }
             },
             '赵丽颖': {
-                name: '赵丽颖',
-                avatar: '🌟',
+                name: '赵丽颖', avatar: '🌟',
                 personality: {
                     bigFive: { openness: 82, conscientiousness: 90, extraversion: 78, agreeableness: 88, neuroticism: 40 },
                     mbti: 'ESFJ',
@@ -164,17 +255,43 @@
                     yearly: { lastYear: 82, thisYear: 88, nextYear: 86 }
                 },
                 wealth: {
+                    score: 88,
                     current_trend: 88,
+                    monthlyTrend: generateMonthlyTrend(86, 4),
                     accumulationTrend: [
                         {year: 2020, score: 78}, {year: 2021, score: 80}, {year: 2022, score: 83},
                         {year: 2023, score: 85}, {year: 2024, score: 87}, {year: 2025, score: 88}
+                    ],
+                    luckyTime: '下午 5:00 - 7:00 (酉时)',
+                    luckyDirection: '南方 (利于知名度和广告收入)'
+                },
+                love: {
+                    score: 90,
+                    stabilityScore: 92,
+                    attractiveness: 93,
+                    monthlyTrend: generateMonthlyTrend(90, 3),
+                    luckyTime: '中午 11:00 - 1:00 (午时)',
+                    luckyDirection: '西南方 (利于家庭和伴侣关系)'
+                },
+                travel: {
+                    score: 85,
+                    bestMonths: ['3月', '5月', '8月', '10月'],
+                    monthlyTrend: generateMonthlyTrend(85, 7),
+                    luckyDirections: ['南方', '东南方'],
+                    travelAdvice: '适合国内外拍摄和活动，春夏运势佳，建议选择文化底蕴深厚的城市'
+                },
+                happiness: {
+                    score: 90,
+                    dimensions: { health: 88, family: 92, career: 90, social: 89, personal: 91 },
+                    yearlyTrend: [
+                        {year: 2020, score: 84}, {year: 2021, score: 86}, {year: 2022, score: 87},
+                        {year: 2023, score: 88}, {year: 2024, score: 89}, {year: 2025, score: 90}
                     ]
                 },
                 career: { successRate: 90, bestFields: ['影视表演', '品牌代言', '内容创作'] }
             },
             '刘亦菲': {
-                name: '刘亦菲',
-                avatar: '🦋',
+                name: '刘亦菲', avatar: '🦋',
                 personality: {
                     bigFive: { openness: 85, conscientiousness: 82, extraversion: 65, agreeableness: 90, neuroticism: 35 },
                     mbti: 'INFJ',
@@ -186,17 +303,43 @@
                     yearly: { lastYear: 84, thisYear: 90, nextYear: 88 }
                 },
                 wealth: {
+                    score: 90,
                     current_trend: 90,
+                    monthlyTrend: generateMonthlyTrend(89, 3),
                     accumulationTrend: [
                         {year: 2020, score: 80}, {year: 2021, score: 82}, {year: 2022, score: 85},
                         {year: 2023, score: 87}, {year: 2024, score: 89}, {year: 2025, score: 90}
+                    ],
+                    luckyTime: '上午 7:00 - 9:00 (辰时)',
+                    luckyDirection: '西北方 (利于国际合作和名誉)'
+                },
+                love: {
+                    score: 92,
+                    stabilityScore: 90,
+                    attractiveness: 96,
+                    monthlyTrend: generateMonthlyTrend(92, 3),
+                    luckyTime: '晚上 9:00 - 11:00 (亥时)',
+                    luckyDirection: '东方 (利于艺术交流和新恋情萌发)'
+                },
+                travel: {
+                    score: 93,
+                    bestMonths: ['4月', '6月', '9月', '11月'],
+                    monthlyTrend: generateMonthlyTrend(91, 5),
+                    luckyDirections: ['东方', '东北方'],
+                    travelAdvice: '国际影视项目运势极佳，全年适合出行，特别推荐欧美和亚洲主要城市'
+                },
+                happiness: {
+                    score: 92,
+                    dimensions: { health: 90, family: 91, career: 94, social: 88, personal: 93 },
+                    yearlyTrend: [
+                        {year: 2020, score: 86}, {year: 2021, score: 88}, {year: 2022, score: 89},
+                        {year: 2023, score: 90}, {year: 2024, score: 91}, {year: 2025, score: 92}
                     ]
                 },
                 career: { successRate: 92, bestFields: ['国际影视', '时尚艺术', '文化交流'] }
             },
             '勒布朗詹姆斯': {
-                name: '勒布朗·詹姆斯',
-                avatar: '🏀',
+                name: '勒布朗·詹姆斯', avatar: '🏀',
                 personality: {
                     bigFive: { openness: 80, conscientiousness: 95, extraversion: 88, agreeableness: 85, neuroticism: 30 },
                     mbti: 'ESTJ',
@@ -208,17 +351,43 @@
                     yearly: { lastYear: 89, thisYear: 95, nextYear: 93 }
                 },
                 wealth: {
+                    score: 95,
                     current_trend: 95,
+                    monthlyTrend: generateMonthlyTrend(94, 3),
                     accumulationTrend: [
                         {year: 2020, score: 85}, {year: 2021, score: 88}, {year: 2022, score: 90},
                         {year: 2023, score: 92}, {year: 2024, score: 94}, {year: 2025, score: 95}
+                    ],
+                    luckyTime: '晚上 7:00 - 9:00 (戌时)',
+                    luckyDirection: '西南方 (利于投资和商业合作)'
+                },
+                love: {
+                    score: 90,
+                    stabilityScore: 94,
+                    attractiveness: 91,
+                    monthlyTrend: generateMonthlyTrend(90, 3),
+                    luckyTime: '晚上 9:00 - 11:00 (亥时)',
+                    luckyDirection: '东北方 (利于家庭和谐和长期关系)'
+                },
+                travel: {
+                    score: 88,
+                    bestMonths: ['2月', '7月', '10月', '12月'],
+                    monthlyTrend: generateMonthlyTrend(87, 5),
+                    luckyDirections: ['西南方', '北方'],
+                    travelAdvice: '适合赛季期间的客场比赛和休赛期的家庭旅行。'
+                },
+                happiness: {
+                    score: 93,
+                    dimensions: { health: 95, family: 92, career: 93, social: 90, personal: 94 },
+                    yearlyTrend: [
+                        {year: 2020, score: 88}, {year: 2021, score: 90}, {year: 2022, score: 91},
+                        {year: 2023, score: 92}, {year: 2024, score: 93}, {year: 2025, score: 93}
                     ]
                 },
-                career: { successRate: 96, bestFields: ['职业体育', '商业投资', '公益事业'] }
+                career: { successRate: 97, bestFields: ['职业篮球', '体育营销', '媒体制作'] }
             },
-            '蓝战非': {
-                name: '蓝战非',
-                avatar: '🎮',
+            '大司马': {
+                name: '大司马', avatar: '🎮',
                 personality: {
                     bigFive: { openness: 70, conscientiousness: 75, extraversion: 90, agreeableness: 80, neuroticism: 45 },
                     mbti: 'ESTP',
@@ -230,39 +399,43 @@
                     yearly: { lastYear: 85, thisYear: 89, nextYear: 87 }
                 },
                 wealth: {
+                    score: 89,
                     current_trend: 89,
+                    monthlyTrend: generateMonthlyTrend(87, 5),
                     accumulationTrend: [
                         {year: 2020, score: 75}, {year: 2021, score: 80}, {year: 2022, score: 84},
                         {year: 2023, score: 87}, {year: 2024, score: 89}, {year: 2025, score: 90}
+                    ],
+                    luckyTime: '晚上 9:00 - 11:00 (亥时)',
+                    luckyDirection: '北方 (利于直播人气和粉丝礼物收入)'
+                },
+                love: {
+                    score: 85,
+                    stabilityScore: 82,
+                    attractiveness: 88,
+                    monthlyTrend: generateMonthlyTrend(85, 4),
+                    luckyTime: '下午 3:00 - 5:00 (申时)',
+                    luckyDirection: '东方 (利于社交和新朋友)'
+                },
+                travel: {
+                    score: 85,
+                    bestMonths: ['1月', '5月', '7月', '12月'],
+                    monthlyTrend: generateMonthlyTrend(84, 8),
+                    luckyDirections: ['北方', '东北方'],
+                    travelAdvice: '适合参加电竞比赛和粉丝见面会。'
+                },
+                happiness: {
+                    score: 88,
+                    dimensions: { health: 80, family: 85, career: 92, social: 90, personal: 91 },
+                    yearlyTrend: [
+                        {year: 2020, score: 80}, {year: 2021, score: 83}, {year: 2022, score: 85},
+                        {year: 2023, score: 87}, {year: 2024, score: 88}, {year: 2025, score: 89}
                     ]
                 },
-                career: { successRate: 90, bestFields: ['游戏直播', '电子竞技', '娱乐内容创作'] }
+                career: { successRate: 88, bestFields: ['游戏直播', '内容创作', '电子竞技'] }
             },
-            'Faker': {
-                name: 'Faker (李相赫)',
-                avatar: '👑',
-                personality: {
-                    bigFive: { openness: 85, conscientiousness: 95, extraversion: 60, agreeableness: 70, neuroticism: 30 },
-                    mbti: 'ISTP',
-                    description: '电子竞技领域的传奇人物，以其冷静的判断力和无与伦比的竞技专注力而闻名。'
-                },
-                fortune: {
-                    daily: { yesterday: 90, today: 93, tomorrow: 91 },
-                    monthly: { lastMonth: 89, current: 92, nextMonth: 90 },
-                    yearly: { lastYear: 90, thisYear: 93, nextYear: 92 }
-                },
-                wealth: {
-                    current_trend: 93,
-                    accumulationTrend: [
-                        {year: 2020, score: 85}, {year: 2021, score: 88}, {year: 2022, score: 90},
-                        {year: 2023, score: 92}, {year: 2024, score: 93}, {year: 2025, score: 94}
-                    ]
-                },
-                career: { successRate: 98, bestFields: ['电子竞技', '战略分析', '教练/领导力'] }
-            },
-            'zbing z.': {
-                name: 'zbing z. (Naiyarat)',
-                avatar: '👻',
+            'PewDiePie': {
+                name: 'PewDiePie', avatar: '😂',
                 personality: {
                     bigFive: { openness: 90, conscientiousness: 80, extraversion: 95, agreeableness: 85, neuroticism: 40 },
                     mbti: 'ENFP',
@@ -274,82 +447,106 @@
                     yearly: { lastYear: 86, thisYear: 91, nextYear: 89 }
                 },
                 wealth: {
+                    score: 92,
                     current_trend: 92,
+                    monthlyTrend: generateMonthlyTrend(90, 4),
                     accumulationTrend: [
                         {year: 2020, score: 80}, {year: 2021, score: 85}, {year: 2022, score: 88},
                         {year: 2023, score: 90}, {year: 2024, score: 91}, {year: 2025, score: 92}
+                    ],
+                    luckyTime: '上午 7:00 - 9:00 (辰时)',
+                    luckyDirection: '东南方 (利于创意变现和内容营销)'
+                },
+                love: {
+                    score: 91,
+                    stabilityScore: 88,
+                    attractiveness: 94,
+                    monthlyTrend: generateMonthlyTrend(91, 3),
+                    luckyTime: '下午 5:00 - 7:00 (酉时)',
+                    luckyDirection: '南方 (利于浪漫关系和公开化)'
+                },
+                travel: {
+                    score: 90,
+                    bestMonths: ['4月', '8月', '11月'],
+                    monthlyTrend: generateMonthlyTrend(88, 5),
+                    luckyDirections: ['北方', '东方'],
+                    travelAdvice: '适合参加国际粉丝见面会和亚洲巡回活动。'
+                },
+                happiness: {
+                    score: 93,
+                    dimensions: { health: 90, family: 92, career: 95, social: 94, personal: 93 },
+                    yearlyTrend: [
+                        {year: 2020, score: 87}, {year: 2021, score: 89}, {year: 2022, score: 90},
+                        {year: 2023, score: 91}, {year: 2024, score: 92}, {year: 2025, score: 93}
                     ]
                 },
-                career: { successRate: 95, bestFields: ['内容创作', '社交媒体营销', '娱乐产业'] }
+                career: { successRate: 95, bestFields: ['视频内容创作', '游戏娱乐', '品牌合作'] }
             }
         };
 
-        function App() {
+        // 核心应用状态管理
+        const App = () => {
             const [isLoggedIn, setIsLoggedIn] = useState(false);
-            const [currentView, setCurrentView] = useState('home');
-            // 确保 authForm 完整初始化
-            const [authForm, setAuthForm] = useState({ username: '', email: '', password: '' });
-            const [token, setToken] = useState('');
+            const [token, setToken] = useState(null);
             const [userData, setUserData] = useState(null);
+            const [currentView, setCurrentView] = useState('home'); // home, login, register, profile, dashboard
+            const [userPrediction, setUserPrediction] = useState(null);
             const [error, setError] = useState('');
-            const [selectedCelebrity, setSelectedCelebrity] = useState(null);
+            const [uploading, setUploading] = useState(false);
+            const [authForm, setAuthForm] = useState({ username: '', password: '', email: '' });
             const [userProfile, setUserProfile] = useState({
                 birthDate: '',
-                birthTime: '',
-                phone: '',
-                photo: null
+                photo: '',
+                gender: 'male',
+                job: 'IT',
+                hobby: '阅读'
             });
-            const [userPrediction, setUserPrediction] = useState(null);
-            const [uploading, setUploading] = useState(false);
+            const [selectedCelebrity, setSelectedCelebrity] = useState(null);
 
-            // 检查是否有保存的token
+            // 检查本地存储中的登录状态
             useEffect(() => {
-                const savedToken = localStorage.getItem('token');
-                const savedUser = localStorage.getItem('userData');
-                if (savedToken && savedUser) {
-                    setToken(savedToken);
-                    setUserData(JSON.parse(savedUser));
+                const storedToken = localStorage.getItem('token');
+                const storedUserData = localStorage.getItem('userData');
+                if (storedToken && storedUserData) {
+                    setToken(storedToken);
+                    setUserData(JSON.parse(storedUserData));
                     setIsLoggedIn(true);
-                    loadUserPrediction(savedToken);
-                    setCurrentView('dashboard'); // 确保登录后跳转
+                    loadUserPrediction(storedToken);
+                    setCurrentView('dashboard');
                 }
             }, []);
 
-            // 加载用户预测数据 (模拟数据，因为没有后端API)
-            const loadUserPrediction = async (authToken) => {
-                // 模拟 API 调用 (如果后端API不可用，使用模拟数据)
-                // try {
-                //     const response = await fetch(`${API_BASE}/dashboard/stats`, {
-                //         headers: { 'Authorization': `Bearer ${authToken || token}` }
-                //     });
-                //     if (response.ok) {
-                //         const data = await response.json();
-                //         setUserPrediction(data);
-                //     }
-                // } catch (error) {
-                //     console.error('加载用户数据失败，使用模拟数据:', error);
-                // }
-
-                await new Promise(resolve => setTimeout(resolve, 500));
+            // 模拟 API 调用加载预测数据
+            const loadUserPrediction = async (userToken) => {
+                await new Promise(resolve => setTimeout(resolve, 500)); // 模拟网络延迟
+                // 模拟根据用户信息生成的预测数据
                 const mockData = {
-                    daily: { today: 85, yesterday: 82, tomorrow: 88 },
-                    monthly: { current: 88, lastMonth: 80, nextMonth: 85 },
-                    yearly: { thisYear: 90, lastYear: 82, nextYear: 86 },
-                    wealth_trend: [{year: 2020, score: 80}, {year: 2021, score: 82}, {year: 2022, score: 85}, {year: 2023, score: 87}, {year: 2024, score: 89}, {year: 2025, score: 90}],
-                    career_fields: ['人工智能', '金融投资', '跨文化交流'],
-                    love_score: 95
+                    daily: { yesterday: 85, today: 90, tomorrow: 88 },
+                    monthly: { lastMonth: 82, current: 89, nextMonth: 87 },
+                    yearly: { lastYear: 84, thisYear: 90, nextYear: 88 },
+                    wealthTrend: generateMonthlyTrend(85, 4),
+                    loveTrend: generateMonthlyTrend(88, 3),
+                    wealthAccumulation: [
+                        {year: 2020, score: 70}, {year: 2021, score: 75}, {year: 2022, score: 80},
+                        {year: 2023, score: 85}, {year: 2024, score: 88}, {year: 2025, score: 90}
+                    ],
+                    bigFive: { openness: 85, conscientiousness: 80, extraversion: 75, agreeableness: 88, neuroticism: 40 },
+                    happinessDimensions: { health: 90, family: 92, career: 88, social: 85, personal: 91 },
+                    luckyWealthTime: '上午 7:00 - 9:00 (辰时)',
+                    luckyWealthDirection: '西北方 (利于投资)',
+                    luckyLoveTime: '晚上 7:00 - 9:00 (戌时)',
+                    luckyLoveDirection: '北方 (利于社交)'
                 };
                 setUserPrediction(mockData);
             };
 
-            // 注册 (使用模拟逻辑)
             const handleRegister = async () => {
                 if (!authForm.email || !authForm.username || !authForm.password) {
                     setError('请填写所有字段');
                     return;
                 }
-
                 setError('');
+                // 模拟注册成功
                 const mockToken = `user-token-${Date.now()}`;
                 setToken(mockToken);
                 setUserData({ username: authForm.username, email: authForm.email });
@@ -360,13 +557,11 @@
                 alert('注册成功！请完善个人信息');
             };
 
-            // 登录 (使用模拟逻辑)
             const handleLogin = async () => {
                 if (!authForm.username || !authForm.password) {
                     setError('请填写用户名和密码');
                     return;
                 }
-
                 setError('');
                 // 模拟成功登录
                 if (authForm.username === 'test' && authForm.password === '123456') {
@@ -383,17 +578,15 @@
                 }
             };
 
-            // 上传照片和个人信息 (使用模拟逻辑)
             const handleProfileUpdate = async () => {
                 if (!userProfile.photo) {
-                    setError('请上传照片/视频');
+                    setError('请上传照片');
                     return;
                 }
                 if (!userProfile.birthDate) {
                     setError('请填写出生日期');
                     return;
                 }
-
                 setUploading(true);
                 setError('');
                 // 模拟分析过程
@@ -404,7 +597,6 @@
                 alert('分析完成，已获取最新时运态势数据！');
             };
 
-            // 登出
             const handleLogout = () => {
                 setIsLoggedIn(false);
                 setToken('');
@@ -415,59 +607,49 @@
                 setCurrentView('home');
             };
 
-            // 首页 - 名人展示
+            // 首页
             const HomePage = () => (
                 <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
                     <nav className="bg-white/10 backdrop-blur-md border-b border-white/20">
                         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-                            <h1 className="text-2xl font-bold text-white">✨ 命运预测系统</h1>
+                            <div className="flex items-center space-x-2">
+                                <h1 className="text-2xl font-bold text-white">🔮 命运预测系统</h1>
+                                <span className="text-white/70 text-sm hidden sm:block">AI 时运态势分析</span>
+                            </div>
                             <div className="space-x-4">
-                                <button onClick={() => setCurrentView('login')} className="px-4 py-2 text-white hover:bg-white/20 rounded-lg">登录</button>
-                                <button onClick={() => setCurrentView('register')} className="px-4 py-2 bg-white text-purple-900 font-semibold rounded-lg hover:bg-gray-100">注册</button>
+                                <button onClick={() => setCurrentView('login')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full font-semibold transition">登录</button>
+                                <button onClick={() => setCurrentView('register')} className="px-4 py-2 bg-transparent border-2 border-white/50 text-white rounded-full font-semibold hover:bg-white/10 transition">注册</button>
                             </div>
                         </div>
                     </nav>
 
-                    <div className="max-w-7xl mx-auto px-4 py-12">
-                        <div className="text-center mb-12">
-                            <h2 className="text-4xl font-bold text-white mb-4">探索命运的奥秘</h2>
-                            <p className="text-xl text-white/80">基于AI的性格分析与命运预测</p>
-                        </div>
+                    <div className="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
+                        <header className="text-center text-white mb-16">
+                            <h2 className="text-5xl md:text-6xl font-extrabold mb-4 leading-tight">
+                                掌握你的<span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-yellow-400">命运时运</span>
+                            </h2>
+                            <p className="text-xl text-indigo-200/90 max-w-2xl mx-auto">
+                                基于 AI 深度学习与传统命理学的融合分析，为你提供个性化的人生趋势报告和行动建议。
+                            </p>
+                        </header>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {Object.values(CELEBRITIES).map((celeb) => (
-                                <div key={celeb.name}
-                                    onClick={() => setSelectedCelebrity(celeb)}
-                                    className="bg-white rounded-xl p-6 cursor-pointer hover:shadow-2xl transition-all transform hover:-translate-y-2">
-                                    <div className="text-6xl text-center mb-4">{celeb.avatar}</div>
-                                    <h3 className="text-2xl font-bold text-center mb-4">{celeb.name.split(' ')[0]}</h3>
-                                    <div className="space-y-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-600">MBTI类型</span>
-                                            <span className="font-bold text-purple-600">{celeb.personality.mbti}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-600">今日运势</span>
-                                            <span className="font-bold text-green-600">{celeb.fortune.daily.today}/100</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-600">职业成功率</span>
-                                            <span className="font-bold text-blue-600">{celeb.career.successRate}%</span>
-                                        </div>
+                        <section className="mb-16">
+                            <h3 className="text-3xl font-bold text-white mb-8 text-center">⭐ 名人时运档案</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-6">
+                                {Object.values(CELEBRITIES).map(celeb => (
+                                    <div key={celeb.name} onClick={() => setSelectedCelebrity(celeb)}
+                                         className="bg-white/10 backdrop-blur-sm p-4 rounded-xl shadow-lg hover:bg-white/20 transition cursor-pointer text-center group">
+                                        <div className="text-5xl mb-2 group-hover:scale-110 transition duration-300">{celeb.avatar}</div>
+                                        <div className="text-lg font-semibold text-white">{celeb.name}</div>
+                                        <div className="text-sm text-indigo-200/70 mt-1">运势: {celeb.fortune.daily.today}</div>
                                     </div>
-                                    <button className="w-full mt-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700">
-                                        查看详情
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        </section>
 
-                        <div className="mt-12 text-center">
-                            <button onClick={() => setCurrentView('register')}
-                                className="px-8 py-4 bg-white text-purple-900 text-xl font-bold rounded-xl hover:bg-gray-100 shadow-2xl">
-                                开始你的命运预测之旅 →
-                            </button>
-                        </div>
+                        <footer className="text-center pt-8 border-t border-indigo-500/50">
+                            <p className="text-indigo-300/70 text-sm">© 2025 命运预测系统. All rights reserved. 模拟演示，结果仅供娱乐参考。</p>
+                        </footer>
                     </div>
                 </div>
             );
@@ -475,9 +657,10 @@
             // 名人详情模态框
             const CelebrityModal = ({ celeb, onClose }) => {
                 if (!celeb) return null;
+
                 return (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
-                        <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8" onClick={(e) => e.stopPropagation()}>
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto" onClick={onClose}>
+                        <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-8 my-8" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center space-x-4">
                                     <div className="text-6xl">{celeb.avatar}</div>
@@ -492,41 +675,91 @@
                             <div className="space-y-6">
                                 {/* 性格描述 */}
                                 <div className="bg-purple-50 p-6 rounded-xl">
-                                    <h3 className="text-xl font-semibold mb-3">性格分析</h3>
+                                    <h3 className="text-xl font-semibold mb-3">🎭 性格分析</h3>
                                     <p className="text-gray-700">{celeb.personality.description}</p>
                                 </div>
 
                                 {/* Big Five雷达图 */}
                                 <div className="bg-gray-50 p-6 rounded-xl">
-                                    <h3 className="text-xl font-semibold mb-4">Big Five人格特质</h3>
+                                    <h3 className="text-xl font-semibold mb-4">📊 Big Five人格特质</h3>
                                     <RadarChart data={celeb.personality.bigFive} />
                                 </div>
 
-                                {/* 运势数据 */}
-                                <div className="grid grid-cols-3 gap-4">
+                                {/* 核心指标 */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="bg-blue-50 p-4 rounded-xl text-center">
                                         <div className="text-3xl font-bold text-blue-600">{celeb.fortune.daily.today}</div>
-                                        <div className="text-gray-600 mt-2">今日运势</div>
+                                        <div className="text-gray-600 mt-2 text-sm">今日运势</div>
                                     </div>
                                     <div className="bg-green-50 p-4 rounded-xl text-center">
-                                        <div className="text-3xl font-bold text-green-600">{celeb.fortune.monthly.current}</div>
-                                        <div className="text-gray-600 mt-2">本月运势</div>
+                                        <div className="text-3xl font-bold text-green-600">{celeb.wealth.score}</div>
+                                        <div className="text-gray-600 mt-2 text-sm">财富指数</div>
                                     </div>
-                                    <div className="bg-purple-50 p-4 rounded-xl text-center">
-                                        <div className="text-3xl font-bold text-purple-600">{celeb.fortune.yearly.thisYear}</div>
-                                        <div className="text-gray-600 mt-2">今年运势</div>
+                                    <div className="bg-red-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-red-600">{celeb.love.score}</div>
+                                        <div className="text-gray-600 mt-2 text-sm">爱情指数</div>
+                                    </div>
+                                    <div className="bg-yellow-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-yellow-600">{celeb.happiness.score}</div>
+                                        <div className="text-gray-600 mt-2 text-sm">幸福指数</div>
                                     </div>
                                 </div>
 
-                                {/* 财富趋势 */}
+                                {/* 财富与爱情月度趋势 (LineChart) */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-white shadow-lg p-6 rounded-xl border border-gray-100">
+                                        <h3 className="text-xl font-semibold mb-4 text-green-600">💰 财富月度趋势</h3>
+                                        <LineChart data={celeb.wealth.monthlyTrend} dataKey="score" />
+                                        <div className="mt-4 p-3 bg-green-50 rounded-lg text-sm">
+                                            **来财吉时/吉方:** {celeb.wealth.luckyTime} / {celeb.wealth.luckyDirection}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white shadow-lg p-6 rounded-xl border border-gray-100">
+                                        <h3 className="text-xl font-semibold mb-4 text-red-600">❤️ 爱情月度趋势</h3>
+                                        <LineChart data={celeb.love.monthlyTrend} dataKey="score" />
+                                        <div className="mt-4 p-3 bg-red-50 rounded-lg text-sm">
+                                            **桃花吉时/吉方:** {celeb.love.luckyTime} / {celeb.love.luckyDirection}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 幸福指数维度分析 (RadarChart) */}
+                                <div className="bg-gradient-to-br from-pink-50 to-purple-50 p-6 rounded-xl">
+                                    <h3 className="text-xl font-semibold mb-4">😊 幸福指数维度分析</h3>
+                                    <RadarChart data={celeb.happiness.dimensions} />
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-red-500">{celeb.happiness.dimensions.health}</div>
+                                            <div className="text-xs text-gray-600">健康</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-orange-500">{celeb.happiness.dimensions.family}</div>
+                                            <div className="text-xs text-gray-600">家庭</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-blue-500">{celeb.happiness.dimensions.career}</div>
+                                            <div className="text-xs text-gray-600">事业</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-green-500">{celeb.happiness.dimensions.social}</div>
+                                            <div className="text-xs text-gray-600">社交</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-purple-500">{celeb.happiness.dimensions.personal}</div>
+                                            <div className="text-xs text-gray-600">个人</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 财富年度趋势 */}
                                 <div className="bg-gray-50 p-6 rounded-xl">
-                                    <h3 className="text-xl font-semibold mb-4">财富积累趋势</h3>
+                                    <h3 className="text-xl font-semibold mb-4">📈 财富年度积累趋势</h3>
                                     <LineChart data={celeb.wealth.accumulationTrend} dataKey="score" />
                                 </div>
 
                                 {/* 最佳职业领域 */}
                                 <div className="bg-indigo-50 p-6 rounded-xl">
-                                    <h3 className="text-xl font-semibold mb-4">最佳职业领域</h3>
+                                    <h3 className="text-xl font-semibold mb-4">🎯 最佳职业领域</h3>
                                     <div className="flex flex-wrap gap-3">
                                         {celeb.career.bestFields.map((field, idx) => (
                                             <span key={idx} className="px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold">
@@ -543,27 +776,22 @@
 
             // 登录页面
             const LoginPage = () => (
-                <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                    <div className="max-w-md w-full p-6">
                         <div className="text-center mb-8">
-                            <div className="text-6xl mb-4">✨</div>
-                            <h1 className="text-3xl font-bold text-gray-800 mb-2">登录</h1>
+                            <h2 className="text-3xl font-bold text-gray-900 mb-2">欢迎回来 👋</h2>
+                            <p className="text-gray-600">登录以查看您的命运档案</p>
                         </div>
-                        {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
-                        <div className="space-y-4">
-                            {/* FIX: 使用函数式更新确保输入稳定性 */}
-                            <input type="text" placeholder="用户名" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                value={authForm.username} onChange={(e) => setAuthForm(prev => ({...prev, username: e.target.value}))} />
-                            {/* FIX: 使用函数式更新确保输入稳定性 */}
-                            <input type="password" placeholder="密码" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                value={authForm.password} onChange={(e) => setAuthForm(prev => ({...prev, password: e.target.value}))}
-                                onKeyPress={(e) => e.key === 'Enter' && handleLogin()} />
+                        <div className="bg-white rounded-xl shadow-2xl p-8 space-y-6">
+                            {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
+                            <input type="text" placeholder="用户名 (模拟: test)" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={authForm.username} onChange={(e) => setAuthForm(prev => ({...prev, username: e.target.value}))} />
+                            <input type="password" placeholder="密码 (模拟: 123456)" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={authForm.password} onChange={(e) => setAuthForm(prev => ({...prev, password: e.target.value}))} />
                             <button onClick={handleLogin} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700">
                                 登录
                             </button>
                             <div className="flex justify-between text-sm">
                                 <button onClick={() => setCurrentView('home')} className="text-gray-600 hover:text-gray-800">← 返回首页</button>
-                                <button onClick={() => setCurrentView('register')} className="text-purple-600 hover:text-purple-700">还没账号？注册</button>
+                                <button onClick={() => setCurrentView('register')} className="text-purple-600 hover:text-purple-700">没有账号？注册</button>
                             </div>
                         </div>
                     </div>
@@ -572,23 +800,18 @@
 
             // 注册页面
             const RegisterPage = () => (
-                <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                    <div className="max-w-md w-full p-6">
                         <div className="text-center mb-8">
-                            <div className="text-6xl mb-4">🎯</div>
-                            <h1 className="text-3xl font-bold text-gray-800 mb-2">注册</h1>
+                            <h2 className="text-3xl font-bold text-gray-900 mb-2">创建你的档案 📝</h2>
+                            <p className="text-gray-600">注册后需完善个人信息以获取预测</p>
                         </div>
-                        {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
-                        <div className="space-y-4">
-                            {/* FIX: 使用函数式更新确保输入稳定性 */}
-                            <input type="email" placeholder="邮箱" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                value={authForm.email} onChange={(e) => setAuthForm(prev => ({...prev, email: e.target.value}))} />
-                            {/* FIX: 使用函数式更新确保输入稳定性 */}
-                            <input type="text" placeholder="用户名" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                value={authForm.username} onChange={(e) => setAuthForm(prev => ({...prev, username: e.target.value}))} />
-                            {/* FIX: 使用函数式更新确保输入稳定性 */}
-                            <input type="password" placeholder="密码" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                value={authForm.password} onChange={(e) => setAuthForm(prev => ({...prev, password: e.target.value}))} />
+                        <div className="bg-white rounded-xl shadow-2xl p-8 space-y-6">
+                            {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{error}</div>}
+                            <input type="text" placeholder="用户名" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={authForm.username} onChange={(e) => setAuthForm(prev => ({...prev, username: e.target.value}))} />
+                            <input type="email" placeholder="邮箱" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={authForm.email} onChange={(e) => setAuthForm(prev => ({...prev, email: e.target.value}))} />
+                            {/* 使用函数式更新确保输入稳定性 */}
+                            <input type="password" placeholder="密码" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={authForm.password} onChange={(e) => setAuthForm(prev => ({...prev, password: e.target.value}))} />
                             <button onClick={handleRegister} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700">
                                 注册
                             </button>
@@ -617,139 +840,171 @@
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-semibold mb-2">出生日期 *</label>
-                                    <input type="date" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                        value={userProfile.birthDate} onChange={(e) => setUserProfile({...userProfile, birthDate: e.target.value})} />
+                                    <input type="date" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={userProfile.birthDate} onChange={(e) => setUserProfile(prev => ({...prev, birthDate: e.target.value}))} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold mb-2">出生时间（可选）</label>
-                                    <input type="time" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                        value={userProfile.birthTime} onChange={(e) => setUserProfile({...userProfile, birthTime: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2">手机号（可选）</label>
-                                    <input type="tel" placeholder="13800138000" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                        value={userProfile.phone} onChange={(e) => setUserProfile({...userProfile, phone: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold mb-2">上传照片或视频 *</label>
-                                    <div className="border-4 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-purple-500 transition-colors">
-                                        <input type="file" accept="image/*,video/*" id="photo-upload" className="hidden"
-                                            onChange={(e) => setUserProfile({...userProfile, photo: e.target.files[0]})} />
-                                        <label htmlFor="photo-upload" className="cursor-pointer">
-                                            <div className="text-4xl mb-2">📸</div>
-                                            <div className="text-gray-600">{userProfile.photo ? userProfile.photo.name : '点击上传照片或视频'}</div>
-                                        </label>
+                                    <label className="block text-sm font-semibold mb-2">照片/视频上传 (模拟)</label>
+                                    <p className="text-sm text-gray-500 mb-2">您的相貌是 AI 预测的关键数据。模拟上传一个占位符。</p>
+                                    <div className="flex items-center space-x-4">
+                                        <div className={`w-20 h-20 rounded-full flex items-center justify-center text-4xl border-4 ${userProfile.photo ? 'border-green-500 bg-green-100' : 'border-dashed border-gray-300 bg-gray-50'}`}>
+                                            {userProfile.photo ? '✅' : '🖼️'}
+                                        </div>
+                                        <button onClick={() => setUserProfile(prev => ({...prev, photo: 'mock_photo_url'}))}
+                                            className="px-4 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-600 transition">
+                                            {userProfile.photo ? '已上传 (重新模拟上传)' : '模拟上传照片'}
+                                        </button>
                                     </div>
+                                    <p className="text-xs text-green-600 mt-2">{userProfile.photo ? '照片已就位，可以进行分析。' : '请先模拟上传照片。'}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">性别</label>
+                                    <select className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={userProfile.gender} onChange={(e) => setUserProfile(prev => ({...prev, gender: e.target.value}))}>
+                                        <option value="male">男性</option>
+                                        <option value="female">女性</option>
+                                        <option value="other">其他</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">职业领域</label>
+                                    <input type="text" placeholder="IT/金融/艺术等" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={userProfile.job} onChange={(e) => setUserProfile(prev => ({...prev, job: e.target.value}))} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2">兴趣爱好</label>
+                                    <input type="text" placeholder="健身/阅读/游戏等" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none" value={authForm.hobby} onChange={(e) => setUserProfile(prev => ({...prev, hobby: e.target.value}))} />
                                 </div>
                                 <button onClick={handleProfileUpdate} disabled={uploading}
-                                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50">
-                                    {uploading ? '分析中...' : '保存并开始分析 🚀'}
+                                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition">
+                                    {uploading ? '正在进行 AI 命运分析...' : '完成并获取时运态势报告'}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             );
-                // 用户仪表盘
-                const DashboardPage = () => {
-                    const predictionData = userPrediction || { daily: {}, monthly: {}, yearly: {}, wealth_trend: null, career_fields: [], love_score: 0 };
-                    return (
-                        <div className="min-h-screen bg-gray-50">
-                            <nav className="bg-white shadow-sm">
-                                <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-                                    <h1 className="text-xl font-bold">✨ 我的命运仪表盘</h1>
-                                    <div className="flex items-center space-x-4">
-                                        <span className="text-gray-700">👤 {userData?.username}</span>
-                                        <button onClick={() => setCurrentView('profile')} className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200">更新信息</button>
-                                        <button onClick={handleLogout} className="text-red-600">登出</button>
-                                    </div>
-                                </div>
-                            </nav>
-                            <div className="max-w-7xl mx-auto p-6">
-                                {userPrediction ? (
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                            <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-xl shadow-lg">
-                                                <div className="text-sm mb-2">📅 今日运势</div>
-                                                <div className="text-4xl font-bold">{predictionData.daily?.today || 0}/100</div>
-                                                <div className="text-sm mt-2 opacity-90">昨天: {predictionData.daily?.yesterday || 0} | 明天: {predictionData.daily?.tomorrow || 0}</div>
-                                            </div>
-                                            <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-xl shadow-lg">
-                                                <div className="text-sm mb-2">📊 本月运势</div>
-                                                <div className="text-4xl font-bold">{predictionData.monthly?.current || 0}/100</div>
-                                                <div className="text-sm mt-2 opacity-90">上月: {predictionData.monthly?.lastMonth || 0} | 下月: {predictionData.monthly?.nextMonth || 0}</div>
-                                            </div>
-                                            <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg">
-                                                <div className="text-sm mb-2">⭐ 今年运势</div>
-                                                <div className="text-4xl font-bold">{predictionData.yearly?.thisYear || 0}/100</div>
-                                                <div className="text-sm mt-2 opacity-90">去年: {predictionData.yearly?.lastYear || 0} | 明年: {predictionData.yearly?.nextYear || 0}</div>
-                                            </div>
-                                        </div>
-                                        {predictionData.wealth_trend && (
-                                            <div className="bg-white rounded-xl shadow-md p-6">
-                                                <h3 className="text-xl font-semibold mb-4">💰 财富积累趋势</h3>
-                                                <LineChart data={predictionData.wealth_trend} dataKey="score" />
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="bg-white rounded-xl shadow-md p-6">
-                                                <h3 className="text-xl font-semibold mb-4">❤️ 感情稳定性</h3>
-                                                <div className="text-5xl font-bold text-red-500">{predictionData.love_score || 0}/100</div>
-                                            </div>
-                                            {predictionData.career_fields && (
-                                                <div className="bg-white rounded-xl shadow-md p-6">
-                                                    <h3 className="text-xl font-semibold mb-4">🎯 最佳职业领域</h3>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {predictionData.career_fields.map((field, idx) => (
-                                                            <span key={idx} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">{field}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="bg-white rounded-xl shadow-md p-12 text-center">
-                                        <div className="text-6xl mb-4">📊</div>
-                                        <h2 className="text-2xl font-bold mb-4">还没有预测数据</h2>
-                                        <p className="text-gray-600 mb-6">上传你的照片，获取专属命运分析</p>
-                                        <button onClick={() => setCurrentView('profile')}
-                                            className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700">
-                                            现在就去更新照片或视频 →
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+
+            // 仪表板页面
+            const DashboardPage = () => (
+                <div className="min-h-screen bg-gray-50">
+                    <nav className="bg-white shadow-sm">
+                        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                            <h1 className="text-xl font-bold">🌟 欢迎, {userData?.username}</h1>
+                            <button onClick={handleLogout} className="text-red-600">登出</button>
                         </div>
-                    );
-                };
+                    </nav>
 
-                // 路由渲染逻辑 (作为 App 的返回值)
-                if (!isLoggedIn) {
-                    if (currentView === 'login') return <LoginPage />;
-                    if (currentView === 'register') return <RegisterPage />;
-                    return (
-                        <>
-                            <HomePage />
-                            {selectedCelebrity && <CelebrityModal celeb={selectedCelebrity} onClose={() => setSelectedCelebrity(null)} />}
-                        </>
-                    );
-                }
+                    <div className="max-w-7xl mx-auto p-6 space-y-8">
+                        <h2 className="text-3xl font-bold text-gray-800 border-b pb-2">时运态势报告</h2>
 
-                if (currentView === 'profile') return <ProfilePage />;
-                return <DashboardPage />;
+                        <div className="bg-white rounded-xl shadow-lg p-8">
+                            {userPrediction ? (
+                                <div className="space-y-8">
+                                    {/* 核心运势概览 */}
+                                    <h3 className="text-2xl font-semibold text-purple-600 mb-4">🔮 核心运势概览</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="bg-gradient-to-br from-indigo-500 to-purple-500 text-white p-6 rounded-xl shadow-lg">
+                                            <div className="text-sm mb-2">☀️ 今日运势</div>
+                                            <div className="text-4xl font-bold">{userPrediction.daily?.today || 0}/100</div>
+                                            <div className="text-sm mt-2 opacity-90">昨日: {userPrediction.daily?.yesterday || 0} | 明日: {userPrediction.daily?.tomorrow || 0}</div>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg">
+                                            <div className="text-sm mb-2">📊 本月运势</div>
+                                            <div className="text-4xl font-bold">{userPrediction.monthly?.current || 0}/100</div>
+                                            <div className="text-sm mt-2 opacity-90">上月: {userPrediction.monthly?.lastMonth || 0} | 下月: {userPrediction.monthly?.nextMonth || 0}</div>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-red-500 to-pink-500 text-white p-6 rounded-xl shadow-lg">
+                                            <div className="text-sm mb-2">⭐ 今年运势</div>
+                                            <div className="text-4xl font-bold">{userPrediction.yearly?.thisYear || 0}/100</div>
+                                            <div className="text-sm mt-2 opacity-90">去年: {userPrediction.yearly?.lastYear || 0} | 明年: {userPrediction.yearly?.nextYear || 0}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* 财富和爱情方位 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-green-50 p-6 rounded-xl border border-green-200">
+                                            <h4 className="text-xl font-semibold text-green-700 mb-2">💰 财富吉时/吉方</h4>
+                                            <p className="text-gray-700 text-lg">**吉时:** {userPrediction.luckyWealthTime}</p>
+                                            <p className="text-gray-700 text-lg">**吉方:** {userPrediction.luckyWealthDirection}</p>
+                                        </div>
+                                        <div className="bg-red-50 p-6 rounded-xl border border-red-200">
+                                            <h4 className="text-xl font-semibold text-red-700 mb-2">❤️ 桃花吉时/吉方</h4>
+                                            <p className="text-gray-700 text-lg">**吉时:** {userPrediction.luckyLoveTime}</p>
+                                            <p className="text-gray-700 text-lg">**吉方:** {userPrediction.luckyLoveDirection}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* 趋势图表区 */}
+                                    <h3 className="text-2xl font-semibold text-purple-600 mb-4 pt-4 border-t border-gray-100">📈 趋势图表分析</h3>
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                        <div className="bg-white shadow-md p-6 rounded-xl border">
+                                            <h4 className="text-xl font-semibold mb-4 text-green-700">财富月度趋势</h4>
+                                            <LineChart data={userPrediction.wealthTrend} dataKey="score" />
+                                        </div>
+                                        <div className="bg-white shadow-md p-6 rounded-xl border">
+                                            <h4 className="text-xl font-semibold mb-4 text-red-700">爱情月度趋势</h4>
+                                            <LineChart data={userPrediction.loveTrend} dataKey="score" />
+                                        </div>
+                                        <div className="bg-white shadow-md p-6 rounded-xl border">
+                                            <h4 className="text-xl font-semibold mb-4 text-blue-700">财富年度积累</h4>
+                                            <LineChart data={userPrediction.wealthAccumulation} dataKey="score" />
+                                        </div>
+                                    </div>
+
+                                    {/* 雷达图表区 */}
+                                    <h3 className="text-2xl font-semibold text-purple-600 mb-4 pt-4 border-t border-gray-100">📊 维度分析</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-white shadow-md p-6 rounded-xl border">
+                                            <h4 className="text-xl font-semibold mb-4 text-orange-700">Big Five 人格特质</h4>
+                                            <RadarChart data={userPrediction.bigFive} />
+                                        </div>
+                                        <div className="bg-white shadow-md p-6 rounded-xl border">
+                                            <h4 className="text-xl font-semibold mb-4 text-pink-700">幸福指数维度</h4>
+                                            <RadarChart data={userPrediction.happinessDimensions} />
+                                        </div>
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="text-center py-16">
+                                    <div className="text-6xl mb-4">📊</div>
+                                    <h2 className="text-2xl font-bold mb-4">还没有预测数据</h2>
+                                    <p className="text-gray-600 mb-6">上传你的照片，获取专属命运分析</p>
+                                    <button onClick={() => setCurrentView('profile')}
+                                        className="px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700">
+                                        现在就去更新照片或视频 →
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // 路由渲染逻辑 (作为 App 的返回值)
+            if (!isLoggedIn) {
+                if (currentView === 'login') return <LoginPage />;
+                if (currentView === 'register') return <RegisterPage />;
+                return (
+                    <>
+                        <HomePage />
+                        {selectedCelebrity && <CelebrityModal celeb={selectedCelebrity} onClose={() => setSelectedCelebrity(null)} />}
+                    </>
+                );
             }
 
-            // =========================================================
-            // React 挂载逻辑 (React 18)
-            // =========================================================
-            const container = document.getElementById('root');
-            if (container) {
-                const root = ReactDOM.createRoot(container);
-                root.render(<App />); // 渲染 App 组件
-            } else {
-                console.error("找不到 ID 为 'root' 的 DOM 元素。");
-            }
+            if (currentView === 'profile') return <ProfilePage />;
+            return <DashboardPage />;
+        }
+
+        // =========================================================
+        // FIX: 使用 React 18 的 createRoot API 渲染
+        // =========================================================
+        const container = document.getElementById('root');
+        if (container) {
+            const root = ReactDOM.createRoot(container);
+            root.render(<App />); // 渲染 App 组件
+        } else {
+            console.error("找不到 ID 为 'root' 的 DOM 元素。");
+        }
     </script>
 </body>
 </html>
